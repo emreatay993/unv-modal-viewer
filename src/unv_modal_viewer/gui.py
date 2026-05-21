@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import numpy as np
@@ -88,7 +89,10 @@ class MainWindow(QMainWindow):
         self._current_points = np.empty((0, 3), dtype=float)
         self._current_scalars = np.empty(0, dtype=float)
         self._current_labels: list[int] = []
+        self._scene_meshes: dict[str, object] = {}
         self._phase = 1.0
+        self._animation_started_at = 0.0
+        self._animation_frequency_hz = 0.55
         self._hover_observer_installed = False
         self._point_picker = _make_point_picker()
 
@@ -460,7 +464,7 @@ class MainWindow(QMainWindow):
         self.copy_diagnostics_button.clicked.connect(self._copy_diagnostics)
 
         self.animation_timer = QTimer(self)
-        self.animation_timer.setInterval(60)
+        self.animation_timer.setInterval(33)
         self.animation_timer.timeout.connect(self._animation_tick)
 
         for widget in [
@@ -540,6 +544,7 @@ class MainWindow(QMainWindow):
         self.refresh_scene(reset_camera=True)
 
     def refresh_scene(self, reset_camera: bool = False) -> None:
+        self._scene_meshes.clear()
         self.plotter.clear()
         self.plotter.set_background("#15181d")
         self.plotter.add_axes()
@@ -555,37 +560,23 @@ class MainWindow(QMainWindow):
             self.plotter.render()
             return
 
-        model = self.model
-        spec = self.current_transform()
-        transformed = transformed_node_coordinates(model, spec)
-        labels = model.node_labels
-        base_points = np.vstack([transformed[label] for label in labels])
-        mode = self.selected_mode()
         phase = self._phase if self.animate_mode.isChecked() else 1.0
-        all_points, all_scalars = deformed_points(
-            model,
-            mode,
-            self.deformation_scale.value() * phase,
-            self.component_combo.currentText(),
-            base_points=base_points,
-            normalization=self.current_mode_normalization(),
-        )
-        if mode is None:
-            all_scalars = np.array(labels, dtype=float)
-
+        frame = self._compute_primary_frame(phase)
+        if frame is None:
+            return
+        labels, all_points, all_scalars, visible_labels, points, scalars = frame
+        model = self.model
+        assert model is not None
         self._all_current_points = all_points
         self._all_current_scalars = all_scalars
         self._all_current_labels = labels
-        visible_labels = self.selection.visible_labels(labels)
-        visible_indices = [labels.index(label) for label in visible_labels]
-        points = all_points[visible_indices] if visible_indices else np.empty((0, 3), dtype=float)
-        scalars = all_scalars[visible_indices] if visible_indices else np.empty(0, dtype=float)
         view_model = _view_model(model, visible_labels)
 
         self._current_points = points
         self._current_scalars = scalars
         self._current_labels = visible_labels
 
+        mode = self.selected_mode()
         scalar_title = self.component_combo.currentText() if mode is not None else "Node"
         options = self.current_render_options()
         surface = None
@@ -595,6 +586,7 @@ class MainWindow(QMainWindow):
             surface = generated_surface(view_model, points)
         if surface is not None:
             surface.point_data["value"] = scalars
+            self._scene_meshes["surface"] = surface
             self.plotter.add_mesh(
                 surface,
                 scalars="value",
@@ -609,11 +601,13 @@ class MainWindow(QMainWindow):
         if self.show_traces.isChecked():
             traces = trace_line_mesh(view_model, points)
             if traces is not None:
+                self._scene_meshes["traces"] = traces
                 self.plotter.add_mesh(traces, color="#d8dee9", line_width=3, render_lines_as_tubes=True)
 
         if self.show_points.isChecked():
             cloud = point_cloud(view_model, points)
             cloud.point_data["value"] = scalars
+            self._scene_meshes["points"] = cloud
             self.plotter.add_mesh(
                 cloud,
                 scalars="value",
@@ -665,6 +659,36 @@ class MainWindow(QMainWindow):
             selected_color=str(self.selected_color_combo.currentData()),
         )
 
+    def _compute_primary_frame(
+        self,
+        phase: float,
+    ) -> tuple[list[int], np.ndarray, np.ndarray, list[int], np.ndarray, np.ndarray] | None:
+        if self.model is None or not self.model.nodes:
+            return None
+
+        model = self.model
+        transformed = transformed_node_coordinates(model, self.current_transform())
+        labels = model.node_labels
+        base_points = np.vstack([transformed[label] for label in labels])
+        mode = self.selected_mode()
+        all_points, all_scalars = deformed_points(
+            model,
+            mode,
+            self.deformation_scale.value() * phase,
+            self.component_combo.currentText(),
+            base_points=base_points,
+            normalization=self.current_mode_normalization(),
+        )
+        if mode is None:
+            all_scalars = np.array(labels, dtype=float)
+
+        visible_labels = self.selection.visible_labels(labels)
+        label_index = {label: index for index, label in enumerate(labels)}
+        visible_indices = [label_index[label] for label in visible_labels]
+        points = all_points[visible_indices] if visible_indices else np.empty((0, 3), dtype=float)
+        scalars = all_scalars[visible_indices] if visible_indices else np.empty(0, dtype=float)
+        return labels, all_points, all_scalars, visible_labels, points, scalars
+
     def current_overlay_transform(self) -> TransformSpec:
         rotation = rotation_matrix_from_euler_degrees(
             self.overlay_rot_x.value(),
@@ -676,6 +700,25 @@ class MainWindow(QMainWindow):
             translation=np.array([self.overlay_trans_x.value(), self.overlay_trans_y.value(), self.overlay_trans_z.value()]),
             cs_rotation=rotation,
         )
+
+    def _compute_overlay_frame(self, phase: float) -> tuple[ModalModel, np.ndarray] | None:
+        if self.overlay.model is None or not self.overlay.visible:
+            return None
+        model = self.overlay.model
+        transformed = transformed_node_coordinates(model, self.current_overlay_transform())
+        labels = model.node_labels
+        if not labels:
+            return None
+        base_points = np.vstack([transformed[label] for label in labels])
+        points, _ = deformed_points(
+            model,
+            self.overlay.selected_mode(),
+            self.overlay.deformation_scale * phase,
+            "Magnitude",
+            base_points=base_points,
+            normalization=self.current_mode_normalization(),
+        )
+        return model, points
 
     def selected_mode(self) -> ModeShape | None:
         if self.model is None:
@@ -1023,6 +1066,7 @@ class MainWindow(QMainWindow):
         selected_points = points[selected_indices]
         selected_model = _view_model(view_model, [visible_labels[index] for index in selected_indices])
         mesh = point_cloud(selected_model, selected_points)
+        self._scene_meshes["selected_points"] = mesh
         self.plotter.add_mesh(
             mesh,
             color=options.selected_color,
@@ -1031,27 +1075,16 @@ class MainWindow(QMainWindow):
         )
 
     def _render_overlay(self, phase: float) -> None:
-        if self.overlay.model is None or not self.overlay.visible:
+        frame = self._compute_overlay_frame(phase)
+        if frame is None:
             return
-        model = self.overlay.model
-        transformed = transformed_node_coordinates(model, self.current_overlay_transform())
-        labels = model.node_labels
-        if not labels:
-            return
-        base_points = np.vstack([transformed[label] for label in labels])
-        points, _ = deformed_points(
-            model,
-            self.overlay.selected_mode(),
-            self.overlay.deformation_scale * phase,
-            "Magnitude",
-            base_points=base_points,
-            normalization=self.current_mode_normalization(),
-        )
+        model, points = frame
         if self.overlay.show_surface:
             surface = element_surface(model, points)
             if surface is None:
                 surface = generated_surface(model, points)
             if surface is not None:
+                self._scene_meshes["overlay_surface"] = surface
                 self.plotter.add_mesh(
                     surface,
                     color=self.overlay.color,
@@ -1061,6 +1094,7 @@ class MainWindow(QMainWindow):
                 )
         if self.overlay.show_points:
             cloud = point_cloud(model, points)
+            self._scene_meshes["overlay_points"] = cloud
             self.plotter.add_mesh(
                 cloud,
                 color=self.overlay.color,
@@ -1184,16 +1218,74 @@ class MainWindow(QMainWindow):
     def _animation_toggled(self, enabled: bool) -> None:
         self._phase = 0.0 if enabled else 1.0
         if enabled:
+            self._animation_started_at = time.perf_counter()
+            if not self._update_animation_frame():
+                self.refresh_scene(reset_camera=False)
             self.animation_timer.start()
         else:
             self.animation_timer.stop()
             self.refresh_scene(reset_camera=False)
 
     def _animation_tick(self) -> None:
-        self._phase = float(np.sin(np.arcsin(np.clip(self._phase, -1.0, 1.0)) + 0.16))
-        if abs(self._phase) > 0.99:
-            self._phase *= -0.95
-        self.refresh_scene(reset_camera=False)
+        elapsed = time.perf_counter() - self._animation_started_at
+        self._phase = float(np.sin(2.0 * np.pi * self._animation_frequency_hz * elapsed))
+        if not self._update_animation_frame():
+            self.refresh_scene(reset_camera=False)
+
+    def _update_animation_frame(self) -> bool:
+        if self.model is None or not self.model.nodes:
+            return False
+
+        frame = self._compute_primary_frame(self._phase)
+        if frame is None:
+            return False
+        labels, all_points, all_scalars, visible_labels, points, scalars = frame
+        if visible_labels != self._current_labels:
+            return False
+
+        for key in ("surface", "traces", "points"):
+            if key in self._scene_meshes and not self._set_mesh_points(key, points):
+                return False
+
+        if "selected_points" in self._scene_meshes:
+            selected_indices = [
+                index for index, label in enumerate(visible_labels) if label in self.selection.selected_node_ids
+            ]
+            selected_points = points[selected_indices] if selected_indices else np.empty((0, 3), dtype=float)
+            if not self._set_mesh_points("selected_points", selected_points):
+                return False
+
+        overlay_frame = self._compute_overlay_frame(self._phase)
+        if overlay_frame is not None:
+            _, overlay_points = overlay_frame
+            for key in ("overlay_surface", "overlay_points"):
+                if key in self._scene_meshes and not self._set_mesh_points(key, overlay_points):
+                    return False
+        elif any(key.startswith("overlay_") for key in self._scene_meshes):
+            return False
+
+        self._all_current_points = all_points
+        self._all_current_scalars = all_scalars
+        self._all_current_labels = labels
+        self._current_points = points
+        self._current_scalars = scalars
+        self._current_labels = visible_labels
+        self.plotter.render()
+        return True
+
+    def _set_mesh_points(self, key: str, points: np.ndarray) -> bool:
+        mesh = self._scene_meshes.get(key)
+        if mesh is None or not hasattr(mesh, "points"):
+            return False
+        try:
+            current = np.asarray(mesh.points)
+            new_points = np.asarray(points, dtype=float)
+            if current.shape != new_points.shape:
+                return False
+            mesh.points = new_points.copy()
+        except Exception:
+            return False
+        return True
 
     def _install_hover_observer(self) -> None:
         if self._hover_observer_installed or self._point_picker is None:
@@ -1466,8 +1558,11 @@ class _NullPlotter(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.mesh_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+        self.clear_count = 0
+        self.render_count = 0
 
     def clear(self) -> None:
+        self.clear_count += 1
         self.mesh_calls.clear()
         return None
 
@@ -1481,6 +1576,7 @@ class _NullPlotter(QWidget):
         return None
 
     def render(self) -> None:
+        self.render_count += 1
         return None
 
     def add_mesh(self, *args: object, **kwargs: object) -> None:

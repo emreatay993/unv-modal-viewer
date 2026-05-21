@@ -69,6 +69,45 @@ def test_main_window_uses_angle_rotation_controls(tmp_path) -> None:
         window.close()
 
 
+def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("PyQt6")
+    from qtpy.QtWidgets import QApplication
+
+    import unv_modal_viewer.gui as gui
+    from unv_modal_viewer.gui import MainWindow, set_fusion_theme
+
+    path = write_generated_modal_unv(tmp_path / "modal_test.unv")
+    app = QApplication.instance() or QApplication([])
+    set_fusion_theme(app)
+
+    window = MainWindow(path, settings=_settings(tmp_path))
+    try:
+        window.show_surface.setChecked(False)
+        window.generate_surface.setChecked(True)
+        window.refresh_scene(reset_camera=False)
+        assert "surface" in window._scene_meshes
+
+        clear_count = window.plotter.clear_count
+        mesh_call_count = len(window.plotter.mesh_calls)
+        render_count = window.plotter.render_count
+        before_points = np.asarray(window._scene_meshes["surface"].points).copy()
+        times = iter([100.0, 100.25])
+        monkeypatch.setattr(gui.time, "perf_counter", lambda: next(times))
+
+        window._animation_toggled(True)
+        window._animation_tick()
+
+        after_points = np.asarray(window._scene_meshes["surface"].points).copy()
+        assert window.animation_timer.interval() == 33
+        assert window.plotter.clear_count == clear_count
+        assert len(window.plotter.mesh_calls) == mesh_call_count
+        assert window.plotter.render_count > render_count
+        assert not np.allclose(before_points, after_points)
+    finally:
+        window.animation_timer.stop()
+        window.close()
+
+
 def test_left_panel_sections_are_collapsible(tmp_path) -> None:
     pytest.importorskip("PyQt6")
     from qtpy.QtWidgets import QApplication
