@@ -92,7 +92,6 @@ class MainWindow(QMainWindow):
         self._scene_meshes: dict[str, object] = {}
         self._phase = 1.0
         self._animation_started_at = 0.0
-        self._animation_frequency_hz = 0.55
         self._hover_observer_installed = False
         self._point_picker = _make_point_picker()
 
@@ -311,10 +310,24 @@ class MainWindow(QMainWindow):
         self.normalization_combo.addItems(list(ModeNormalization.LABELS.values()))
         self.deformation_scale = _double_box(1.0, minimum=-1.0e9, maximum=1.0e9, step=0.1)
         self.animate_mode = QCheckBox()
+        animation_preferences = self.settings.load_animation_preferences()
+        self.animation_time = _double_box(
+            float(animation_preferences["duration_seconds"]),
+            minimum=0.1,
+            maximum=3600.0,
+            step=0.1,
+        )
+        self.animation_time.setSuffix(" s")
+        self.animation_fps = QSpinBox()
+        self.animation_fps.setRange(1, 240)
+        self.animation_fps.setValue(int(animation_preferences["fps"]))
+        self.animation_fps.setSuffix(" fps")
         mode_controls.addRow("Color by", self.component_combo)
         mode_controls.addRow("Normalization", self.normalization_combo)
         mode_controls.addRow("Deformation scale", self.deformation_scale)
         mode_controls.addRow("Animate", self.animate_mode)
+        mode_controls.addRow("Animation time", self.animation_time)
+        mode_controls.addRow("FPS", self.animation_fps)
         mode_layout.addLayout(mode_controls)
         layout.addWidget(self.mode_section)
 
@@ -464,8 +477,10 @@ class MainWindow(QMainWindow):
         self.copy_diagnostics_button.clicked.connect(self._copy_diagnostics)
 
         self.animation_timer = QTimer(self)
-        self.animation_timer.setInterval(33)
+        self.animation_timer.setInterval(self._animation_interval_ms())
         self.animation_timer.timeout.connect(self._animation_tick)
+        self.animation_time.valueChanged.connect(lambda *_: self._animation_preferences_changed())
+        self.animation_fps.valueChanged.connect(lambda *_: self._animation_preferences_changed())
 
         for widget in [
             self.scale_x,
@@ -1226,9 +1241,20 @@ class MainWindow(QMainWindow):
     def _copy_diagnostics(self) -> None:
         QApplication.clipboard().setText(self.diagnostics_text.toPlainText())
 
+    def _animation_interval_ms(self) -> int:
+        return max(1, int(round(1000.0 / max(1, self.animation_fps.value()))))
+
+    def _animation_duration_seconds(self) -> float:
+        return max(0.1, float(self.animation_time.value()))
+
+    def _animation_preferences_changed(self) -> None:
+        self.settings.save_animation_preferences(self.animation_time.value(), self.animation_fps.value())
+        self.animation_timer.setInterval(self._animation_interval_ms())
+
     def _animation_toggled(self, enabled: bool) -> None:
         self._phase = 0.0 if enabled else 1.0
         if enabled:
+            self._animation_preferences_changed()
             self._animation_started_at = time.perf_counter()
             if not self._update_animation_frame():
                 self.refresh_scene(reset_camera=False)
@@ -1239,7 +1265,7 @@ class MainWindow(QMainWindow):
 
     def _animation_tick(self) -> None:
         elapsed = time.perf_counter() - self._animation_started_at
-        self._phase = float(np.sin(2.0 * np.pi * self._animation_frequency_hz * elapsed))
+        self._phase = float(np.sin(2.0 * np.pi * elapsed / self._animation_duration_seconds()))
         if not self._update_animation_frame():
             self.refresh_scene(reset_camera=False)
 
@@ -1368,6 +1394,7 @@ class MainWindow(QMainWindow):
             self.show_traces.isChecked(),
         )
         self.settings.save_overlay_preferences(self.overlay_opacity.value(), str(self.overlay_color_combo.currentData()))
+        self.settings.save_animation_preferences(self.animation_time.value(), self.animation_fps.value())
         self.settings.save_window(self, self.splitter, self._sections())
         super().closeEvent(event)
 

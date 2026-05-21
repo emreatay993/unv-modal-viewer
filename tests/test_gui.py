@@ -87,6 +87,8 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         window.refresh_scene(reset_camera=False)
         assert "surface" in window._scene_meshes
 
+        window.animation_time.setValue(2.0)
+        window.animation_fps.setValue(20)
         clear_count = window.plotter.clear_count
         mesh_call_count = len(window.plotter.mesh_calls)
         render_count = window.plotter.render_count
@@ -98,7 +100,8 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         window._animation_tick()
 
         after_points = np.asarray(window._scene_meshes["surface"].points).copy()
-        assert window.animation_timer.interval() == 33
+        assert window.animation_timer.interval() == 50
+        assert window._phase == pytest.approx(np.sin(np.pi / 4.0))
         assert window.plotter.clear_count == clear_count
         assert len(window.plotter.mesh_calls) == mesh_call_count
         assert window.plotter.render_count > render_count

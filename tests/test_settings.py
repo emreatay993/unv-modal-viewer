@@ -43,6 +43,7 @@ def test_view_and_overlay_preferences_round_trip(tmp_path: Path) -> None:
 
     settings.save_view_flags(points=False, surface=True, generated_surface=False, traces=True)
     settings.save_overlay_preferences(opacity=0.44, color="#22c55e")
+    settings.save_animation_preferences(duration_seconds=3.5, fps=48)
     restored = AppSettings(_qsettings(tmp_path / "settings.ini"))
 
     assert restored.load_view_flags() == {
@@ -52,3 +53,4 @@ def test_view_and_overlay_preferences_round_trip(tmp_path: Path) -> None:
         "traces": True,
     }
     assert restored.load_overlay_preferences() == {"opacity": 0.44, "color": "#22c55e"}
+    assert restored.load_animation_preferences() == {"duration_seconds": 3.5, "fps": 48}

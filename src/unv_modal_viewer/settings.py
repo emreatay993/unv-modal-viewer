@@ -98,6 +98,16 @@ class AppSettings:
             "color": str(self.settings.value("overlay/color", "#f59e0b")),
         }
 
+    def save_animation_preferences(self, duration_seconds: float, fps: int) -> None:
+        self.settings.setValue("animation/duration_seconds", float(duration_seconds))
+        self.settings.setValue("animation/fps", int(fps))
+
+    def load_animation_preferences(self) -> dict[str, object]:
+        return {
+            "duration_seconds": float(self.settings.value("animation/duration_seconds", 1.8)),
+            "fps": int(self.settings.value("animation/fps", 30)),
+        }
+
 
 def _bool(value: object) -> bool:
     if isinstance(value, bool):
