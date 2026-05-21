@@ -3,8 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
+from .modal_analysis import normalized_mode_vectors_for_nodes
 from .model import Element, ModalModel, ModeShape
-from .transforms import mode_vectors_for_nodes
+from .state import ModeNormalization
 
 
 def point_cloud(model: ModalModel, points: np.ndarray | None = None) -> pv.PolyData:
@@ -81,14 +82,14 @@ def deformed_points(
     scale: float,
     component: str = "Magnitude",
     base_points: np.ndarray | None = None,
+    normalization: str = ModeNormalization.RAW,
 ) -> tuple[np.ndarray, np.ndarray]:
     points = model.points if base_points is None else np.asarray(base_points, dtype=float)
     if mode is None:
         return points, np.zeros(points.shape[0], dtype=float)
-    vectors, scalars = mode_vectors_for_nodes(model, mode, component)
+    vectors, scalars = normalized_mode_vectors_for_nodes(model, mode, normalization, component)
     return points + vectors * float(scale), scalars
 
 
 def supported_surface_elements(elements: list[Element]) -> int:
     return sum(1 for element in elements if len(element.node_labels) >= 3)
-

@@ -9,9 +9,12 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("QT_API", "pyqt6")
 
     args = list(sys.argv[1:] if argv is None else argv)
+    from qtpy.QtCore import QCoreApplication
     from qtpy.QtWidgets import QApplication
     from .gui import MainWindow, set_fusion_theme
 
+    QCoreApplication.setOrganizationName("Mechanical Design Tool Suite")
+    QCoreApplication.setApplicationName("UNV Modal Viewer")
     app = QApplication.instance() or QApplication(sys.argv[:1] + args)
     set_fusion_theme(app)
     initial = Path(args[0]) if args else None
