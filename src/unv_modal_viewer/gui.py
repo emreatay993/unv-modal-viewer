@@ -872,6 +872,8 @@ class MainWindow(QMainWindow):
         )
         if self.model.units is not None:
             text += f"\nUnits: {self.model.units.description or self.model.units.code}"
+        if self.model.header is not None:
+            text += f"\nHeader: {self.model.header.model_name or self.model.header.description or 'dataset 151'}"
         if self.model.diagnostics:
             text += f"\nDiagnostics: {len(self.model.diagnostics)} preserved/read notes"
         self.summary_label.setText(text)
@@ -1360,6 +1362,21 @@ class MainWindow(QMainWindow):
             lines.append(f"File: {self.current_path or ''}")
             lines.append(f"Datasets: {counts}")
             lines.append(f"Unsupported/preserved datasets: {unsupported or 'none'}")
+            if self.model.header is not None:
+                header = self.model.header
+                lines.extend(
+                    [
+                        "Dataset 151 header:",
+                        f"  Model name: {header.model_name}",
+                        f"  Description: {header.description}",
+                        f"  Database app: {header.db_app}",
+                        f"  Created: {_join_date_time(header.date_db_created, header.time_db_created)}",
+                        f"  Saved: {_join_date_time(header.date_db_saved, header.time_db_saved)}",
+                        f"  Program: {header.program}",
+                        f"  File written: {_join_date_time(header.date_file_written, header.time_file_written)}",
+                        f"  File type: {'' if header.file_type is None else header.file_type}",
+                    ]
+                )
             lines.extend(self.model.diagnostics)
         lines.extend(self._messages)
         self.diagnostics_text.setPlainText("\n".join(lines))
@@ -1710,6 +1727,7 @@ def _view_model(model: ModalModel, labels: list[int]) -> ModalModel:
         elements=model.elements,
         trace_lines=model.trace_lines,
         coordinate_systems=model.coordinate_systems,
+        header=model.header,
         units=model.units,
         modes=model.modes,
         functions=model.functions,
@@ -1746,6 +1764,10 @@ def _make_point_picker() -> object | None:
 
 def _fmt(value: float | None) -> str:
     return "" if value is None else f"{value:.6g}"
+
+
+def _join_date_time(date_value: str, time_value: str) -> str:
+    return " ".join(value for value in [date_value, time_value] if value)
 
 
 class _NullPlotter(QWidget):

@@ -4,7 +4,7 @@ Standalone PyQt/PyVista viewer for ASCII UNV/UFF modal-test files.
 
 ## Features
 
-- Reads common modal-test datasets: `15`, `55`, `58`, `82`, `164`, `2411`, `2412`, `2414`, and `2420`.
+- Reads common modal-test datasets: `15`, `55`, `58`, `82`, `151`, `164`, `2411`, `2412`, `2414`, and `2420`.
 - Treats dataset `164` as units metadata.
 - Preserves unknown or unsupported datasets during export.
 - Visualizes test points, trace lines, file topology, generated triangulated surfaces, and dataset `55` / `2414` mode shapes.

@@ -17,6 +17,11 @@ def test_load_generated_modal_unv_reads_modal_test_datasets(tmp_path: Path) -> N
     path = write_generated_modal_unv(tmp_path / "modal_test.unv")
     model = load_unv(path)
 
+    assert model.header is not None
+    assert model.header.model_name == "Generated model"
+    assert model.header.description == "Generated modal fixture"
+    assert model.header.program == "unv_modal_viewer"
+    assert model.header.file_type == 0
     assert model.units is not None
     assert model.units.code == 1
     assert len(model.nodes) == 4
@@ -44,7 +49,10 @@ def test_export_rewrites_coordinates_and_preserves_unknown_blocks(tmp_path: Path
     exported = out.read_text(encoding="latin-1")
     reloaded = load_unv(out)
 
+    assert "Generated modal fixture" in exported
     assert "UNKNOWN_PAYLOAD_SHOULD_STAY_BYTE_FOR_BYTE" in exported
+    assert reloaded.header is not None
+    assert reloaded.header.model_name == "Generated model"
     assert reloaded.nodes[2].coordinates.tolist() == pytest.approx([2.0, 0.0, 0.0])
     assert reloaded.modes[0].node_values[1].tolist() == pytest.approx([1.0, 0.0, 0.0])
 

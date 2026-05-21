@@ -10,6 +10,7 @@ from .model import (
     CoordinateSystem,
     Element,
     FunctionSummary,
+    Header,
     ModalModel,
     ModeShape,
     Node,
@@ -21,7 +22,7 @@ from .model import (
 from .transforms import transformed_mode_shape, transformed_node_coordinates
 
 
-SUPPORTED_DATASETS = {15, 55, 58, 82, 164, 2411, 2412, 2414, 2420}
+SUPPORTED_DATASETS = {15, 55, 58, 82, 151, 164, 2411, 2412, 2414, 2420}
 BEAM_DESCRIPTOR_IDS = {11, 21, 22, 23, 24}
 
 
@@ -120,6 +121,8 @@ def _parse_supported_block(model: ModalModel, block: RawDatasetBlock) -> None:
         _parse_nodes(model, block)
     elif block.dataset_type == 82:
         model.trace_lines.extend(_parse_trace_lines(block))
+    elif block.dataset_type == 151:
+        model.header = _parse_header(block)
     elif block.dataset_type == 164:
         model.units = _parse_units(block)
     elif block.dataset_type == 2412:
@@ -228,6 +231,33 @@ def _parse_units(block: RawDatasetBlock) -> Units | None:
     while len(factors) < 4:
         factors.append(1.0 if len(factors) < 3 else 0.0)
     return Units(code, description, temperature_mode, tuple(factors[:4]), block_index=block.index)
+
+
+def _parse_header(block: RawDatasetBlock) -> Header | None:
+    lines = block.content_lines
+    if not lines:
+        return None
+
+    rec4 = _fixed_or_split(lines[3] if len(lines) > 3 else "", [10, 10, 10, 10, 10])
+    rec5 = _fixed_or_split(lines[4] if len(lines) > 4 else "", [10, 10])
+    rec7 = _fixed_or_split(lines[6] if len(lines) > 6 else "", [10, 10])
+
+    return Header(
+        model_name=_text_record(lines, 0),
+        description=_text_record(lines, 1),
+        db_app=_text_record(lines, 2),
+        date_db_created=_field(rec4, 0),
+        time_db_created=_field(rec4, 1),
+        version_db1=_safe_int_value(_field(rec4, 2)),
+        version_db2=_safe_int_value(_field(rec4, 3)),
+        file_type=_safe_int_value(_field(rec4, 4)),
+        date_db_saved=_field(rec5, 0),
+        time_db_saved=_field(rec5, 1),
+        program=_text_record(lines, 5),
+        date_file_written=_field(rec7, 0),
+        time_file_written=_field(rec7, 1),
+        block_index=block.index,
+    )
 
 
 def _parse_elements(block: RawDatasetBlock) -> list[Element]:
@@ -602,6 +632,35 @@ def _safe_float(parts: list[str], index: int) -> float | None:
         return _float(parts[index])
     except (IndexError, ValueError):
         return None
+
+
+def _safe_int_value(value: str) -> int | None:
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _text_record(lines: list[str], index: int) -> str:
+    if index >= len(lines):
+        return ""
+    return lines[index].rstrip("\r\n").strip()
+
+
+def _fixed_or_split(line: str, widths: list[int]) -> list[str]:
+    text = line.rstrip("\r\n")
+    if len(text) < sum(widths):
+        return text.split()
+    fields: list[str] = []
+    start = 0
+    for width in widths:
+        fields.append(text[start : start + width].strip())
+        start += width
+    return fields
+
+
+def _field(values: list[str], index: int) -> str:
+    return values[index] if index < len(values) else ""
 
 
 def _line(text: str) -> str:

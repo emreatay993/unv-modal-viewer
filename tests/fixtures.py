@@ -10,6 +10,16 @@ def write_generated_modal_unv(path: Path) -> Path:
 
 def generated_modal_unv() -> str:
     return """    -1
+   151
+Generated model
+Generated modal fixture
+unv_modal_viewer tests
+21-May-26 12:00:00         1         2         0
+21-May-26 12:30:00
+unv_modal_viewer
+21-May-26 12:45:00
+    -1
+    -1
    164
          1    SI unit system         1
    1.0000000000000000D+00   1.0000000000000000D+00   1.0000000000000000D+00
@@ -96,4 +106,3 @@ Mode shape
 UNKNOWN_PAYLOAD_SHOULD_STAY_BYTE_FOR_BYTE
     -1
 """
-

@@ -70,6 +70,24 @@ class Units:
 
 
 @dataclass(slots=True)
+class Header:
+    model_name: str
+    description: str
+    db_app: str
+    date_db_created: str
+    time_db_created: str
+    version_db1: int | None
+    version_db2: int | None
+    file_type: int | None
+    date_db_saved: str
+    time_db_saved: str
+    program: str
+    date_file_written: str
+    time_file_written: str
+    block_index: int = -1
+
+
+@dataclass(slots=True)
 class ModeShape:
     name: str
     source_dataset: int
@@ -130,6 +148,7 @@ class ModalModel:
     elements: list[Element] = field(default_factory=list)
     trace_lines: list[TraceLine] = field(default_factory=list)
     coordinate_systems: dict[int, CoordinateSystem] = field(default_factory=dict)
+    header: Header | None = None
     units: Units | None = None
     modes: list[ModeShape] = field(default_factory=list)
     functions: list[FunctionSummary] = field(default_factory=list)
@@ -151,4 +170,3 @@ class ModalModel:
 
     def node_index(self) -> dict[int, int]:
         return {label: i for i, label in enumerate(self.node_labels)}
-

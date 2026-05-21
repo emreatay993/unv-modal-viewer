@@ -305,6 +305,8 @@ def test_diagnostics_panel_and_overlay_state(tmp_path) -> None:
     try:
         window.model.diagnostics.append("diagnostic marker")
         window._update_diagnostics_panel()
+        assert "Dataset 151 header" in window.diagnostics_text.toPlainText()
+        assert "Generated model" in window.diagnostics_text.toPlainText()
         assert "diagnostic marker" in window.diagnostics_text.toPlainText()
 
         window._load_overlay_file(overlay_path)

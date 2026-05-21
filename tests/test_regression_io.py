@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from unv_modal_viewer.io import export_unv, load_unv
+from unv_modal_viewer.io import SUPPORTED_DATASETS, export_unv, load_unv
 from unv_modal_viewer.model import TransformSpec
 
 
@@ -25,6 +25,38 @@ def test_prefix_suffix_and_unknown_blocks_are_preserved_exactly(tmp_path: Path) 
 
     export_unv(load_unv(path), out, TransformSpec.identity())
 
+    assert out.read_text(encoding="latin-1") == source
+
+
+def test_dataset_151_header_is_parsed_and_preserved_exactly(tmp_path: Path) -> None:
+    source = """    -1
+   151
+Beam model
+Impact hammer modal test
+AcquisitionSystem
+21-May-26 12:00:00         3         4         0
+21-May-26 12:30:00
+unv_modal_viewer
+21-May-26 12:45:00
+    -1
+"""
+    path = tmp_path / "header_151.unv"
+    out = tmp_path / "header_151_out.unv"
+    path.write_text(source, encoding="latin-1")
+
+    model = load_unv(path)
+    export_unv(model, out, TransformSpec.identity())
+
+    assert 151 in SUPPORTED_DATASETS
+    assert model.header is not None
+    assert model.header.model_name == "Beam model"
+    assert model.header.description == "Impact hammer modal test"
+    assert model.header.db_app == "AcquisitionSystem"
+    assert model.header.version_db1 == 3
+    assert model.header.version_db2 == 4
+    assert model.header.file_type == 0
+    assert model.header.date_file_written == "21-May-26"
+    assert model.header.time_file_written == "12:45:00"
     assert out.read_text(encoding="latin-1") == source
 
 
@@ -200,4 +232,3 @@ Shape
     export_unv(load_unv(path), out, TransformSpec.identity(), transform_vectors=False)
 
     assert out.read_text(encoding="latin-1") == source
-
