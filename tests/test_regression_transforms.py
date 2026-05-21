@@ -6,8 +6,10 @@ import pytest
 from unv_modal_viewer.model import ModalModel, ModeShape, Node, TransformSpec
 from unv_modal_viewer.transforms import (
     apply_transform,
+    euler_degrees_from_rotation_matrix,
     mode_vectors_for_nodes,
     normalized_axes_from_rows,
+    rotation_matrix_from_euler_degrees,
     transform_vector_values,
 )
 from unv_modal_viewer.visualization import generated_surface
@@ -96,6 +98,20 @@ def test_normalized_axes_from_rows_returns_orthonormal_basis() -> None:
     assert axes @ axes.T == pytest.approx(np.eye(3))
 
 
+def test_rotation_angles_match_existing_row_vector_matrix_convention() -> None:
+    rotation = rotation_matrix_from_euler_degrees(0.0, 0.0, 90.0)
+
+    np.testing.assert_allclose(rotation, ROT_Z_ROW_VECTOR, atol=1.0e-12)
+
+
+def test_rotation_angles_round_trip_through_matrix() -> None:
+    rotation = rotation_matrix_from_euler_degrees(25.0, -10.0, 40.0)
+    angles = euler_degrees_from_rotation_matrix(rotation)
+    rebuilt = rotation_matrix_from_euler_degrees(*angles)
+
+    np.testing.assert_allclose(rebuilt, rotation, atol=1.0e-12)
+
+
 def test_generated_surface_returns_none_for_collinear_points() -> None:
     model = ModalModel(
         path=None,
@@ -108,4 +124,3 @@ def test_generated_surface_returns_none_for_collinear_points() -> None:
     )
 
     assert generated_surface(model) is None
-

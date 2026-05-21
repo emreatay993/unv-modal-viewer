@@ -5,6 +5,29 @@ import numpy as np
 from .model import ModalModel, ModeShape, TransformSpec
 
 
+def rotation_matrix_from_euler_degrees(x_deg: float, y_deg: float, z_deg: float) -> np.ndarray:
+    """Return the row-vector transform matrix for X -> Y -> Z degree rotations."""
+    x, y, z = np.radians([x_deg, y_deg, z_deg])
+    return _axis_rotation("X", x) @ _axis_rotation("Y", y) @ _axis_rotation("Z", z)
+
+
+def euler_degrees_from_rotation_matrix(rotation: np.ndarray) -> np.ndarray:
+    """Return X/Y/Z degrees for a matrix built as Rx @ Ry @ Rz."""
+    matrix = np.asarray(rotation, dtype=float).reshape(3, 3)
+    sy = float(np.clip(matrix[0, 2], -1.0, 1.0))
+    y = float(np.arcsin(sy))
+    cy = float(np.cos(y))
+
+    if abs(cy) > 1.0e-10:
+        x = float(np.arctan2(-matrix[1, 2], matrix[2, 2]))
+        z = float(np.arctan2(-matrix[0, 1], matrix[0, 0]))
+    else:
+        x = 0.0
+        z = float(np.arctan2(matrix[1, 0], matrix[1, 1]))
+
+    return np.degrees([x, y, z])
+
+
 def normalized_axes_from_rows(rows: np.ndarray) -> np.ndarray:
     matrix = np.asarray(rows, dtype=float).reshape(3, 3)
     q, _ = np.linalg.qr(matrix.T)
@@ -102,3 +125,14 @@ def _transform_real_vector(values: np.ndarray, rotation: np.ndarray, scale: np.n
         out[3:6] = out[3:6] @ rotation
     return out
 
+
+def _axis_rotation(axis: str, angle_rad: float) -> np.ndarray:
+    c = float(np.cos(angle_rad))
+    s = float(np.sin(angle_rad))
+    if axis == "X":
+        return np.array([[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]], dtype=float)
+    if axis == "Y":
+        return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], dtype=float)
+    if axis == "Z":
+        return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], dtype=float)
+    raise ValueError(f"Unsupported rotation axis: {axis}")

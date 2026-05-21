@@ -17,7 +17,6 @@ from qtpy.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -39,7 +38,11 @@ from pyvistaqt import QtInteractor
 
 from .io import export_unv, load_unv
 from .model import CoordinateSystem, ModalModel, ModeShape, TransformSpec
-from .transforms import transformed_node_coordinates
+from .transforms import (
+    euler_degrees_from_rotation_matrix,
+    rotation_matrix_from_euler_degrees,
+    transformed_node_coordinates,
+)
 from .visualization import (
     deformed_points,
     element_surface,
@@ -152,17 +155,18 @@ class MainWindow(QMainWindow):
         transform_layout.addRow("CS origin Z", self.origin_z)
         layout.addWidget(transform_group)
 
-        axes_group = QGroupBox("CS Rotation Rows")
-        axes_layout = QGridLayout(axes_group)
-        self.axis_boxes: list[QDoubleSpinBox] = []
-        defaults = np.eye(3)
-        for row in range(3):
-            axes_layout.addWidget(QLabel(f"R{row + 1}"), row, 0)
-            for col in range(3):
-                box = _double_box(float(defaults[row, col]), minimum=-1.0, maximum=1.0, step=0.05)
-                self.axis_boxes.append(box)
-                axes_layout.addWidget(box, row, col + 1)
-        layout.addWidget(axes_group)
+        rotation_group = QGroupBox("Rotation Angles")
+        rotation_layout = QFormLayout(rotation_group)
+        self.rot_x = _angle_box(0.0)
+        self.rot_y = _angle_box(0.0)
+        self.rot_z = _angle_box(0.0)
+        self.rot_x.setToolTip("X rotation in degrees. Rotations are applied in X, then Y, then Z order.")
+        self.rot_y.setToolTip("Y rotation in degrees. Rotations are applied in X, then Y, then Z order.")
+        self.rot_z.setToolTip("Z rotation in degrees. Rotations are applied in X, then Y, then Z order.")
+        rotation_layout.addRow("X angle", self.rot_x)
+        rotation_layout.addRow("Y angle", self.rot_y)
+        rotation_layout.addRow("Z angle", self.rot_z)
+        layout.addWidget(rotation_group)
 
         view_group = QGroupBox("View")
         view_layout = QFormLayout(view_group)
@@ -234,7 +238,7 @@ class MainWindow(QMainWindow):
             self.deformation_scale,
         ]:
             widget.valueChanged.connect(lambda *_: self.refresh_scene(reset_camera=False))
-        for box in self.axis_boxes:
+        for box in [self.rot_x, self.rot_y, self.rot_z]:
             box.valueChanged.connect(lambda *_: self.refresh_scene(reset_camera=False))
         for box in [self.show_points, self.show_surface, self.generate_surface, self.show_traces]:
             box.toggled.connect(lambda *_: self.refresh_scene(reset_camera=False))
@@ -338,7 +342,7 @@ class MainWindow(QMainWindow):
         self.plotter.render()
 
     def current_transform(self) -> TransformSpec:
-        rotation = np.array([box.value() for box in self.axis_boxes], dtype=float).reshape(3, 3)
+        rotation = rotation_matrix_from_euler_degrees(self.rot_x.value(), self.rot_y.value(), self.rot_z.value())
         return TransformSpec(
             scale=np.array([self.scale_x.value(), self.scale_y.value(), self.scale_z.value()]),
             translation=np.array([self.trans_x.value(), self.trans_y.value(), self.trans_z.value()]),
@@ -440,7 +444,8 @@ class MainWindow(QMainWindow):
     def _set_coordinate_system(self, cs: CoordinateSystem | None) -> None:
         rotation = np.eye(3) if cs is None else cs.rotation
         origin = np.zeros(3) if cs is None else cs.origin
-        for box, value in zip(self.axis_boxes, rotation.reshape(-1), strict=False):
+        angles = euler_degrees_from_rotation_matrix(rotation)
+        for box, value in zip([self.rot_x, self.rot_y, self.rot_z], angles, strict=False):
             box.blockSignals(True)
             box.setValue(float(value))
             box.blockSignals(False)
@@ -586,6 +591,12 @@ def _double_box(
     box.setRange(minimum, maximum)
     box.setSingleStep(step)
     box.setValue(value)
+    return box
+
+
+def _angle_box(value: float) -> QDoubleSpinBox:
+    box = _double_box(value, minimum=-360.0, maximum=360.0, step=1.0)
+    box.setSuffix(" deg")
     return box
 
 

@@ -8,7 +8,7 @@ Standalone PyQt/PyVista viewer for ASCII UNV/UFF modal-test files.
 - Treats dataset `164` as units metadata.
 - Preserves unknown or unsupported datasets during export.
 - Visualizes test points, trace lines, file topology, generated triangulated surfaces, and dataset `55` / `2414` mode shapes.
-- Supports coordinate scale, translation, and user coordinate-system alignment.
+- Supports coordinate scale, translation, and X/Y/Z degree rotation for coordinate-system alignment.
 - Exports modified UNV/UFF coordinates, with an export toggle to also transform mode-shape vectors.
 - Uses PyVista/PyVistaQt with a left vertical scalar legend and hover readout in the top-left viewport.
 
