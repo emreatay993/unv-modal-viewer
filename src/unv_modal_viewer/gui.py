@@ -322,12 +322,15 @@ class MainWindow(QMainWindow):
         self.animation_fps.setRange(1, 240)
         self.animation_fps.setValue(int(animation_preferences["fps"]))
         self.animation_fps.setSuffix(" fps")
+        self.animation_time_label = QLabel("Animation time")
+        self.animation_fps_label = QLabel("FPS")
         mode_controls.addRow("Color by", self.component_combo)
         mode_controls.addRow("Normalization", self.normalization_combo)
         mode_controls.addRow("Deformation scale", self.deformation_scale)
         mode_controls.addRow("Animate", self.animate_mode)
-        mode_controls.addRow("Animation time", self.animation_time)
-        mode_controls.addRow("FPS", self.animation_fps)
+        mode_controls.addRow(self.animation_time_label, self.animation_time)
+        mode_controls.addRow(self.animation_fps_label, self.animation_fps)
+        self._set_animation_controls_visible(False)
         mode_layout.addLayout(mode_controls)
         layout.addWidget(self.mode_section)
 
@@ -1251,7 +1254,17 @@ class MainWindow(QMainWindow):
         self.settings.save_animation_preferences(self.animation_time.value(), self.animation_fps.value())
         self.animation_timer.setInterval(self._animation_interval_ms())
 
+    def _set_animation_controls_visible(self, visible: bool) -> None:
+        for widget in [
+            self.animation_time_label,
+            self.animation_time,
+            self.animation_fps_label,
+            self.animation_fps,
+        ]:
+            widget.setVisible(visible)
+
     def _animation_toggled(self, enabled: bool) -> None:
+        self._set_animation_controls_visible(enabled)
         self._phase = 0.0 if enabled else 1.0
         if enabled:
             self._animation_preferences_changed()

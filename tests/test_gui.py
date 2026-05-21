@@ -86,6 +86,8 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         window.generate_surface.setChecked(True)
         window.refresh_scene(reset_camera=False)
         assert "surface" in window._scene_meshes
+        assert window.animation_time.isHidden()
+        assert window.animation_fps.isHidden()
 
         window.animation_time.setValue(2.0)
         window.animation_fps.setValue(20)
@@ -97,6 +99,8 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         monkeypatch.setattr(gui.time, "perf_counter", lambda: next(times))
 
         window._animation_toggled(True)
+        assert not window.animation_time.isHidden()
+        assert not window.animation_fps.isHidden()
         window._animation_tick()
 
         after_points = np.asarray(window._scene_meshes["surface"].points).copy()
@@ -106,6 +110,10 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         assert len(window.plotter.mesh_calls) == mesh_call_count
         assert window.plotter.render_count > render_count
         assert not np.allclose(before_points, after_points)
+
+        window._animation_toggled(False)
+        assert window.animation_time.isHidden()
+        assert window.animation_fps.isHidden()
     finally:
         window.animation_timer.stop()
         window.close()
