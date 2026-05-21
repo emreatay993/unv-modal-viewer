@@ -120,12 +120,9 @@ def test_left_panel_sections_are_collapsible(tmp_path) -> None:
 
     window = MainWindow(path, settings=_settings(tmp_path))
     try:
-        assert window.transform_section.is_expanded()
-        assert not window.transform_section.content.isHidden()
-
-        window.transform_section.set_expanded(False)
-        assert not window.transform_section.is_expanded()
-        assert window.transform_section.content.isHidden()
+        for section in window._sections().values():
+            assert not section.is_expanded()
+            assert section.content.isHidden()
 
         window.transform_section.set_expanded(True)
         assert window.transform_section.is_expanded()

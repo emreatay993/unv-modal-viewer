@@ -1397,7 +1397,7 @@ class ExportDialog(QDialog):
 
 
 class _CollapsibleSection(QWidget):
-    def __init__(self, title: str, expanded: bool = True, parent: QWidget | None = None) -> None:
+    def __init__(self, title: str, expanded: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.header = QToolButton()
         self.header.setObjectName("SectionHeader")
