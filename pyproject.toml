@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "unv-modal-viewer"
+version = "0.1.0"
+description = "Standalone PyQt/PyVista UNV/UFF modal test viewer and coordinate editor"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+authors = [{ name = "Mechanical Design Tool Suite" }]
+dependencies = [
+  "numpy>=1.26",
+  "pyuff>=2.5.6",
+  "pyvista>=0.44",
+  "pyvistaqt>=0.11",
+  "PyQt6>=6.7",
+  "qtpy>=2.4",
+  "vtk>=9.3",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+]
+build = [
+  "pyinstaller>=6.11",
+  "pyinstaller-hooks-contrib>=2025.1",
+]
+
+[project.scripts]
+unv-modal-viewer = "unv_modal_viewer.app:main"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/unv_modal_viewer"]
