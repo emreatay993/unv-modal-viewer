@@ -10,6 +10,10 @@ SAMPLES: dict[str, str] = {
     "beam.uff": "https://raw.githubusercontent.com/ladisk/pyuff/main/data/beam.uff",
     "2411 and 2414.uff": "https://raw.githubusercontent.com/ladisk/pyuff/main/data/2411%20and%202414.uff",
     "uff55_translation.uff": "https://raw.githubusercontent.com/ladisk/pyuff/main/data/uff55_translation.uff",
+    "Artemis geometry.uff": (
+        "https://raw.githubusercontent.com/ladisk/pyuff/main/data/"
+        "Artemis%20export%20-%20Geometry%20RPBC_setup_05_14102016_105117.uff"
+    ),
 }
 
 

@@ -34,7 +34,7 @@ or:
 .\.venv\Scripts\unv-modal-viewer.exe path\to\file.unv
 ```
 
-The public `pyuff` `beam.uff` file is used by tests as a real modal-test UFF fixture. It contains dataset `164`, `2420`, `2411`, and three dataset `58` FRFs. The tests also generate compact dataset `55`/`2414` fixtures for true mode-shape and damping coverage.
+The public `pyuff` `beam.uff` file is used by tests as a real modal-test UFF fixture. It contains dataset `164`, `2420`, `2411`, and three dataset `58` FRFs. The app also exposes the public pyuff Artemis geometry export as a sample file. The tests generate compact dataset `55`/`2414` fixtures for true mode-shape and damping coverage.
 
 ## Build A Windows Executable
 
