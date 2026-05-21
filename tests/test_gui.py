@@ -58,3 +58,29 @@ def test_main_window_uses_angle_rotation_controls(tmp_path) -> None:
         )
     finally:
         window.close()
+
+
+def test_left_panel_sections_are_collapsible(tmp_path) -> None:
+    pytest.importorskip("PyQt6")
+    from qtpy.QtWidgets import QApplication
+
+    from unv_modal_viewer.gui import MainWindow, set_fusion_theme
+
+    path = write_generated_modal_unv(tmp_path / "modal_test.unv")
+    app = QApplication.instance() or QApplication([])
+    set_fusion_theme(app)
+
+    window = MainWindow(path)
+    try:
+        assert window.transform_section.is_expanded()
+        assert not window.transform_section.content.isHidden()
+
+        window.transform_section.set_expanded(False)
+        assert not window.transform_section.is_expanded()
+        assert window.transform_section.content.isHidden()
+
+        window.transform_section.set_expanded(True)
+        assert window.transform_section.is_expanded()
+        assert not window.transform_section.content.isHidden()
+    finally:
+        window.close()

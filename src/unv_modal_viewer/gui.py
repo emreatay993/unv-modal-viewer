@@ -17,9 +17,9 @@ from qtpy.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -31,6 +31,7 @@ from qtpy.QtWidgets import (
     QStyleFactory,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -110,8 +111,9 @@ class MainWindow(QMainWindow):
         title.setObjectName("PanelTitle")
         layout.addWidget(title)
 
-        file_group = QGroupBox("File")
-        file_layout = QVBoxLayout(file_group)
+        self.file_section = _CollapsibleSection("File")
+        file_layout = QVBoxLayout()
+        self.file_section.set_content_layout(file_layout)
         self.path_label = QLabel("No file loaded")
         self.path_label.setWordWrap(True)
         file_layout.addWidget(self.path_label)
@@ -127,10 +129,11 @@ class MainWindow(QMainWindow):
         self.summary_label = QLabel("Datasets: none")
         self.summary_label.setWordWrap(True)
         file_layout.addWidget(self.summary_label)
-        layout.addWidget(file_group)
+        layout.addWidget(self.file_section)
 
-        transform_group = QGroupBox("Coordinate Transform")
-        transform_layout = QFormLayout(transform_group)
+        self.transform_section = _CollapsibleSection("Coordinate Transform")
+        transform_layout = QFormLayout()
+        self.transform_section.set_content_layout(transform_layout)
         transform_layout.setLabelAlignment(Qt.AlignLeft)
         self.scale_x = _double_box(1.0, minimum=-1.0e9, maximum=1.0e9, step=0.1)
         self.scale_y = _double_box(1.0, minimum=-1.0e9, maximum=1.0e9, step=0.1)
@@ -153,10 +156,11 @@ class MainWindow(QMainWindow):
         transform_layout.addRow("CS origin X", self.origin_x)
         transform_layout.addRow("CS origin Y", self.origin_y)
         transform_layout.addRow("CS origin Z", self.origin_z)
-        layout.addWidget(transform_group)
+        layout.addWidget(self.transform_section)
 
-        rotation_group = QGroupBox("Rotation Angles")
-        rotation_layout = QFormLayout(rotation_group)
+        self.rotation_section = _CollapsibleSection("Rotation Angles")
+        rotation_layout = QFormLayout()
+        self.rotation_section.set_content_layout(rotation_layout)
         self.rot_x = _angle_box(0.0)
         self.rot_y = _angle_box(0.0)
         self.rot_z = _angle_box(0.0)
@@ -166,10 +170,11 @@ class MainWindow(QMainWindow):
         rotation_layout.addRow("X angle", self.rot_x)
         rotation_layout.addRow("Y angle", self.rot_y)
         rotation_layout.addRow("Z angle", self.rot_z)
-        layout.addWidget(rotation_group)
+        layout.addWidget(self.rotation_section)
 
-        view_group = QGroupBox("View")
-        view_layout = QFormLayout(view_group)
+        self.view_section = _CollapsibleSection("View")
+        view_layout = QFormLayout()
+        self.view_section.set_content_layout(view_layout)
         self.show_points = QCheckBox()
         self.show_points.setChecked(True)
         self.show_surface = QCheckBox()
@@ -186,10 +191,11 @@ class MainWindow(QMainWindow):
         self.point_size.setRange(2, 30)
         self.point_size.setValue(10)
         view_layout.addRow("Point size", self.point_size)
-        layout.addWidget(view_group)
+        layout.addWidget(self.view_section)
 
-        mode_group = QGroupBox("Modes")
-        mode_layout = QVBoxLayout(mode_group)
+        self.mode_section = _CollapsibleSection("Modes")
+        mode_layout = QVBoxLayout()
+        self.mode_section.set_content_layout(mode_layout)
         self.mode_table = QTableWidget(0, 5)
         self.mode_table.setHorizontalHeaderLabels(["Mode", "Freq Hz", "Visc", "Hyst", "DOF"])
         self.mode_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -207,7 +213,7 @@ class MainWindow(QMainWindow):
         mode_controls.addRow("Deformation scale", self.deformation_scale)
         mode_controls.addRow("Animate", self.animate_mode)
         mode_layout.addLayout(mode_controls)
-        layout.addWidget(mode_group)
+        layout.addWidget(self.mode_section)
 
         layout.addStretch(1)
         return container
@@ -534,6 +540,47 @@ class ExportDialog(QDialog):
         return dialog.vector_check.isChecked()
 
 
+class _CollapsibleSection(QWidget):
+    def __init__(self, title: str, expanded: bool = True, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.header = QToolButton()
+        self.header.setObjectName("SectionHeader")
+        self.header.setText(title)
+        self.header.setCheckable(True)
+        self.header.setChecked(expanded)
+        self.header.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.header.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self.header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self.content = QFrame()
+        self.content.setObjectName("SectionContent")
+        self.content.setVisible(expanded)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.header)
+        layout.addWidget(self.content)
+
+        self.header.toggled.connect(self._set_expanded)
+
+    def set_content_layout(self, layout: QLayout) -> None:
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+        self.content.setLayout(layout)
+
+    def is_expanded(self) -> bool:
+        return self.header.isChecked()
+
+    def set_expanded(self, expanded: bool) -> None:
+        self.header.setChecked(expanded)
+
+    def _set_expanded(self, expanded: bool) -> None:
+        self.header.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self.content.setVisible(expanded)
+        self.updateGeometry()
+
+
 def set_fusion_theme(app: QApplication) -> None:
     fusion = QStyleFactory.create("Fusion")
     app.setStyle(fusion if fusion is not None else "Fusion")
@@ -555,14 +602,26 @@ def set_fusion_theme(app: QApplication) -> None:
     app.setStyleSheet(
         """
         QWidget { font-size: 10pt; }
-        QGroupBox {
+        QToolButton#SectionHeader {
+            text-align: left;
+            padding: 8px 10px;
             border: 1px solid #3a4250;
             border-radius: 6px;
-            margin-top: 10px;
-            padding-top: 12px;
             font-weight: 600;
+            background: #252b35;
         }
-        QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }
+        QToolButton#SectionHeader:hover { background: #303746; }
+        QToolButton#SectionHeader:checked {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        QFrame#SectionContent {
+            border: 1px solid #3a4250;
+            border-top: 0;
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+            background: #20242b;
+        }
         QPushButton { padding: 7px 10px; border-radius: 4px; }
         QPushButton:hover { background: #3a4250; }
         QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
