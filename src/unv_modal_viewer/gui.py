@@ -579,6 +579,7 @@ class MainWindow(QMainWindow):
         mode = self.selected_mode()
         scalar_title = self.component_combo.currentText() if mode is not None else "Node"
         options = self.current_render_options()
+        scalar_clim = self._effective_scalar_clim(options, scalar_title)
         surface = None
         if self.show_surface.isChecked():
             surface = element_surface(view_model, points)
@@ -591,7 +592,7 @@ class MainWindow(QMainWindow):
                 surface,
                 scalars="value",
                 cmap=options.pyvista_colormap,
-                clim=options.clim,
+                clim=scalar_clim,
                 opacity=options.surface_opacity,
                 smooth_shading=True,
                 scalar_bar_args=_scalar_bar_args(scalar_title, options.legend_position),
@@ -612,7 +613,7 @@ class MainWindow(QMainWindow):
                 cloud,
                 scalars="value",
                 cmap=options.pyvista_colormap,
-                clim=options.clim,
+                clim=scalar_clim,
                 point_size=options.point_size,
                 render_points_as_spheres=True,
                 scalar_bar_args=_scalar_bar_args(scalar_title, options.legend_position),
@@ -658,6 +659,16 @@ class MainWindow(QMainWindow):
             point_size=self.point_size.value(),
             selected_color=str(self.selected_color_combo.currentData()),
         )
+
+    def _effective_scalar_clim(self, options: RenderOptions, scalar_title: str) -> tuple[float, float] | None:
+        if options.clim is not None:
+            return options.clim
+        if (
+            self.current_mode_normalization() == ModeNormalization.MAX_DISPLACEMENT
+            and scalar_title == "Magnitude"
+        ):
+            return (0.0, 1.0)
+        return None
 
     def _compute_primary_frame(
         self,

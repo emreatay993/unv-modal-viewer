@@ -209,6 +209,41 @@ def test_appearance_controls_update_render_options(tmp_path) -> None:
         window.close()
 
 
+def test_max_displacement_magnitude_uses_zero_to_one_legend_range(tmp_path) -> None:
+    pytest.importorskip("PyQt6")
+    from qtpy.QtWidgets import QApplication
+
+    from unv_modal_viewer.gui import MainWindow, set_fusion_theme
+
+    path = write_generated_modal_unv(tmp_path / "modal_test.unv")
+    app = QApplication.instance() or QApplication([])
+    set_fusion_theme(app)
+
+    window = MainWindow(path, settings=_settings(tmp_path))
+    try:
+        window.scalar_auto.setChecked(True)
+        window.normalization_combo.setCurrentText("Max displacement")
+        window.component_combo.setCurrentText("Magnitude")
+        window.refresh_scene(reset_camera=False)
+
+        scalar_mesh_kwargs = [
+            kwargs for _, kwargs in window.plotter.mesh_calls if kwargs.get("scalars") == "value"
+        ]
+        assert scalar_mesh_kwargs
+        assert {kwargs.get("clim") for kwargs in scalar_mesh_kwargs} == {(0.0, 1.0)}
+
+        window.component_combo.setCurrentText("Z")
+        window.refresh_scene(reset_camera=False)
+
+        z_scalar_mesh_kwargs = [
+            kwargs for _, kwargs in window.plotter.mesh_calls if kwargs.get("scalars") == "value"
+        ]
+        assert z_scalar_mesh_kwargs
+        assert {kwargs.get("clim") for kwargs in z_scalar_mesh_kwargs} == {None}
+    finally:
+        window.close()
+
+
 def test_diagnostics_panel_and_overlay_state(tmp_path) -> None:
     pytest.importorskip("PyQt6")
     from qtpy.QtWidgets import QApplication
