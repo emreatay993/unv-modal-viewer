@@ -88,6 +88,7 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         assert "surface" in window._scene_meshes
         assert window.animation_time.isHidden()
         assert window.animation_fps.isHidden()
+        assert not window.export_animation_button.isEnabled()
 
         window.animation_time.setValue(2.0)
         window.animation_fps.setValue(20)
@@ -101,6 +102,7 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         window._animation_toggled(True)
         assert not window.animation_time.isHidden()
         assert not window.animation_fps.isHidden()
+        assert window.export_animation_button.isEnabled()
         window._animation_tick()
 
         after_points = np.asarray(window._scene_meshes["surface"].points).copy()
@@ -114,6 +116,7 @@ def test_animation_tick_updates_meshes_without_rebuilding_scene(tmp_path, monkey
         window._animation_toggled(False)
         assert window.animation_time.isHidden()
         assert window.animation_fps.isHidden()
+        assert not window.export_animation_button.isEnabled()
     finally:
         window.animation_timer.stop()
         window.close()

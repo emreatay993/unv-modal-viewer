@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 import numpy as np
 
@@ -10,6 +10,8 @@ from .modal_analysis import mode_label
 from .model import ModalModel, ModeShape, TransformSpec
 from .transforms import transformed_node_coordinates
 from .visualization import element_surface, point_cloud
+
+SUPPORTED_ANIMATION_EXTENSIONS = {".mp4", ".avi", ".gif"}
 
 
 def export_nodes_csv(
@@ -121,6 +123,53 @@ def export_scene_vtk(
 
 def export_screenshot(plotter: object, path: str | Path) -> None:
     plotter.screenshot(str(path))
+
+
+def export_animation_media(
+    path: str | Path,
+    frame_source: Callable[[float], np.ndarray],
+    duration_seconds: float,
+    fps: int,
+    writer_factory: Callable[[Path, int], object] | None = None,
+) -> int:
+    destination = Path(path)
+    suffix = destination.suffix.lower()
+    if suffix not in SUPPORTED_ANIMATION_EXTENSIONS:
+        raise ValueError("Animation export supports .mp4, .avi, and .gif files.")
+
+    safe_fps = max(1, int(fps))
+    frame_count = max(1, int(round(max(0.1, float(duration_seconds)) * safe_fps)))
+    writer_factory = writer_factory or _imageio_writer
+
+    with writer_factory(destination, safe_fps) as writer:
+        for frame_index in range(frame_count):
+            phase = float(np.sin(2.0 * np.pi * frame_index / frame_count))
+            writer.append_data(_rgb_uint8(frame_source(phase)))
+    return frame_count
+
+
+def _imageio_writer(path: Path, fps: int) -> object:
+    try:
+        import imageio.v2 as imageio
+    except ImportError as exc:
+        raise RuntimeError("Install imageio and imageio-ffmpeg to export animation media.") from exc
+    return imageio.get_writer(str(path), fps=fps)
+
+
+def _rgb_uint8(frame: np.ndarray) -> np.ndarray:
+    image = np.asarray(frame)
+    if image.ndim == 2:
+        image = np.repeat(image[:, :, None], 3, axis=2)
+    if image.ndim != 3 or image.shape[2] not in (3, 4):
+        raise ValueError("Animation frames must be grayscale, RGB, or RGBA images.")
+    if image.shape[2] == 4:
+        image = image[:, :, :3]
+    if np.issubdtype(image.dtype, np.floating):
+        scale = 255.0 if float(np.nanmax(image)) <= 1.0 else 1.0
+        image = np.clip(image * scale, 0.0, 255.0).astype(np.uint8)
+    elif image.dtype != np.uint8:
+        image = np.clip(image, 0, 255).astype(np.uint8)
+    return np.ascontiguousarray(image)
 
 
 def _component_rows(mode: ModeShape, values: np.ndarray) -> list[tuple[str, float, float]]:

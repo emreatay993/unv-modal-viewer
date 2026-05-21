@@ -17,6 +17,8 @@ dependencies = [
   "PyQt6>=6.7",
   "qtpy>=2.4",
   "vtk>=9.3",
+  "imageio>=2.37.3",
+  "imageio-ffmpeg>=0.6.0",
 ]
 
 [project.optional-dependencies]

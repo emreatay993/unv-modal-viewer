@@ -40,6 +40,8 @@ from qtpy.QtWidgets import (
 from pyvistaqt import QtInteractor
 
 from .exporters import (
+    SUPPORTED_ANIMATION_EXTENSIONS,
+    export_animation_media,
     export_mac_csv,
     export_modes_csv,
     export_nodes_csv,
@@ -425,10 +427,14 @@ class MainWindow(QMainWindow):
         self.export_modes_button = QPushButton("Export Mode Shapes CSV")
         self.export_screenshot_button = QPushButton("Export Screenshot PNG")
         self.export_scene_button = QPushButton("Export Scene VTK/VTU")
+        self.export_animation_button = QPushButton("Export Animation MP4/AVI/GIF")
+        self.export_animation_button.setEnabled(False)
+        self.export_animation_button.setToolTip("Enable Animate in the Modes section to export an animation.")
         exports_layout.addWidget(self.export_nodes_button)
         exports_layout.addWidget(self.export_modes_button)
         exports_layout.addWidget(self.export_screenshot_button)
         exports_layout.addWidget(self.export_scene_button)
+        exports_layout.addWidget(self.export_animation_button)
         layout.addWidget(self.exports_section)
 
         self.diagnostics_section = _CollapsibleSection("Diagnostics", expanded=False)
@@ -477,6 +483,7 @@ class MainWindow(QMainWindow):
         self.export_modes_button.clicked.connect(self._export_modes)
         self.export_screenshot_button.clicked.connect(self._export_screenshot)
         self.export_scene_button.clicked.connect(self._export_scene)
+        self.export_animation_button.clicked.connect(self._export_animation)
         self.copy_diagnostics_button.clicked.connect(self._copy_diagnostics)
 
         self.animation_timer = QTimer(self)
@@ -547,6 +554,7 @@ class MainWindow(QMainWindow):
         self.current_path = path
         self.path_label.setText(str(path))
         self.export_button.setEnabled(True)
+        self._update_animation_export_state()
         self.settings.add_recent_file(path)
         self.settings.set_last_folder(path)
         self.selection = SelectionState()
@@ -1008,6 +1016,49 @@ class MainWindow(QMainWindow):
             )
             self._record_message("INFO", f"Exported scene geometry to {file_name}")
 
+    def _export_animation(self) -> None:
+        if self.model is None or not self.animate_mode.isChecked():
+            QMessageBox.information(self, "Animation export unavailable", "Enable Animate before exporting media.")
+            return
+        file_name = self._choose_save_file(
+            "Export animation",
+            "mode_animation.mp4",
+            "Animation files (*.mp4 *.avi *.gif)",
+        )
+        if not file_name:
+            return
+
+        path = Path(file_name)
+        if not path.suffix:
+            path = path.with_suffix(".mp4")
+        if path.suffix.lower() not in SUPPORTED_ANIMATION_EXTENSIONS:
+            QMessageBox.warning(self, "Animation export failed", "Choose an .mp4, .avi, or .gif output file.")
+            return
+
+        was_running = self.animation_timer.isActive()
+        original_phase = self._phase
+        if was_running:
+            self.animation_timer.stop()
+        try:
+            frames = export_animation_media(
+                path,
+                self._capture_animation_frame,
+                self._animation_duration_seconds(),
+                self.animation_fps.value(),
+            )
+            self._record_message("INFO", f"Exported animation media to {path} ({frames} frames)")
+            self.statusBar().showMessage(f"Exported {path.name}")
+        except Exception as exc:
+            QMessageBox.warning(self, "Animation export failed", str(exc))
+            self._record_message("WARN", f"Animation export failed: {exc}")
+        finally:
+            self._phase = original_phase
+            if not self._update_animation_frame():
+                self.refresh_scene(reset_camera=False)
+            if was_running:
+                self._animation_started_at = time.perf_counter()
+                self.animation_timer.start()
+
     def _choose_save_file(self, title: str, default_name: str, filter_text: str) -> str:
         start = self.current_path.with_name(default_name) if self.current_path else self.settings.last_folder() / default_name
         file_name, _ = QFileDialog.getSaveFileName(self, title, str(start), f"{filter_text};;All files (*.*)")
@@ -1263,8 +1314,14 @@ class MainWindow(QMainWindow):
         ]:
             widget.setVisible(visible)
 
+    def _update_animation_export_state(self, animate_enabled: bool | None = None) -> None:
+        animate_enabled = self.animate_mode.isChecked() if animate_enabled is None else animate_enabled
+        enabled = self.model is not None and animate_enabled
+        self.export_animation_button.setEnabled(enabled)
+
     def _animation_toggled(self, enabled: bool) -> None:
         self._set_animation_controls_visible(enabled)
+        self._update_animation_export_state(enabled)
         self._phase = 0.0 if enabled else 1.0
         if enabled:
             self._animation_preferences_changed()
@@ -1281,6 +1338,16 @@ class MainWindow(QMainWindow):
         self._phase = float(np.sin(2.0 * np.pi * elapsed / self._animation_duration_seconds()))
         if not self._update_animation_frame():
             self.refresh_scene(reset_camera=False)
+
+    def _capture_animation_frame(self, phase: float) -> np.ndarray:
+        self._phase = float(phase)
+        if not self._update_animation_frame():
+            self.refresh_scene(reset_camera=False)
+        QApplication.processEvents()
+        image = self.plotter.screenshot(return_img=True)
+        if image is None:
+            raise RuntimeError("PyVista did not return an animation frame image.")
+        return np.asarray(image)
 
     def _update_animation_frame(self) -> bool:
         if self.model is None or not self.model.nodes:
@@ -1637,5 +1704,10 @@ class _NullPlotter(QWidget):
     def reset_camera(self) -> None:
         return None
 
-    def screenshot(self, path: str) -> None:
-        Path(path).write_bytes(b"")
+    def screenshot(self, path: str | None = None, *args: object, **kwargs: object) -> np.ndarray | None:
+        image = np.zeros((8, 8, 3), dtype=np.uint8)
+        if path:
+            Path(path).write_bytes(b"")
+        if kwargs.get("return_img", True):
+            return image
+        return None

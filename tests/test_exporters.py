@@ -6,7 +6,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from unv_modal_viewer.exporters import export_mac_csv, export_modes_csv, export_nodes_csv, export_scene_vtk
+from unv_modal_viewer.exporters import (
+    export_animation_media,
+    export_mac_csv,
+    export_modes_csv,
+    export_nodes_csv,
+    export_scene_vtk,
+)
 from unv_modal_viewer.io import load_unv
 from unv_modal_viewer.model import TransformSpec
 
@@ -61,3 +67,49 @@ def test_export_scene_vtk_contains_node_metadata(tmp_path: Path) -> None:
     assert "node_id" in mesh.point_data
     assert "selected" in mesh.point_data
     assert "hidden" in mesh.point_data
+
+
+def test_export_animation_media_uses_duration_fps_and_rgb_frames(tmp_path: Path) -> None:
+    class FakeWriter:
+        def __init__(self) -> None:
+            self.frames: list[np.ndarray] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def append_data(self, frame: np.ndarray) -> None:
+            self.frames.append(frame)
+
+    writer = FakeWriter()
+    phases: list[float] = []
+
+    def writer_factory(path: Path, fps: int) -> FakeWriter:
+        assert path == tmp_path / "mode.mp4"
+        assert fps == 4
+        return writer
+
+    def frame_source(phase: float) -> np.ndarray:
+        phases.append(phase)
+        return np.zeros((3, 5, 4), dtype=np.uint8)
+
+    frame_count = export_animation_media(
+        tmp_path / "mode.mp4",
+        frame_source,
+        duration_seconds=1.0,
+        fps=4,
+        writer_factory=writer_factory,
+    )
+
+    assert frame_count == 4
+    assert phases == pytest.approx([0.0, 1.0, 0.0, -1.0], abs=1.0e-12)
+    assert len(writer.frames) == 4
+    assert writer.frames[0].shape == (3, 5, 3)
+    assert writer.frames[0].dtype == np.uint8
+
+
+def test_export_animation_media_rejects_unknown_extension(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="mp4"):
+        export_animation_media(tmp_path / "mode.mov", lambda phase: np.zeros((2, 2, 3)), 1.0, 10)

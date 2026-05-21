@@ -12,7 +12,7 @@ Standalone PyQt/PyVista viewer for ASCII UNV/UFF modal-test files.
 - Exports modified UNV/UFF coordinates, with an export toggle to also transform mode-shape vectors.
 - Uses PyVista/PyVistaQt with a left vertical scalar legend and hover readout in the top-left viewport.
 - Persists recent files, layout, view options, legend/color options, and overlay preferences.
-- Supports point selection, selected-node tables, hide/isolate selection, diagnostics, sample-file loading, overlay models, MAC/cross-MAC, and CSV/VTK/screenshot exports.
+- Supports point selection, selected-node tables, hide/isolate selection, diagnostics, sample-file loading, overlay models, MAC/cross-MAC, and CSV/VTK/screenshot/MP4/AVI/GIF exports.
 
 ## Install
 

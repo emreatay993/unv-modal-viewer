@@ -19,6 +19,9 @@ hiddenimports = [
     "qtpy.QtGui",
     "qtpy.QtWidgets",
     "pyuff",
+    "imageio",
+    "imageio.v2",
+    "imageio_ffmpeg",
     "pyvista",
     "pyvista.plotting",
     "pyvistaqt",
@@ -55,7 +58,7 @@ hiddenimports = [
 ]
 
 datas = []
-for package in ("pyvista", "pyvistaqt", "vtkmodules"):
+for package in ("imageio_ffmpeg", "pyvista", "pyvistaqt", "vtkmodules"):
     datas += collect_data_files(package)
 
 binaries = collect_dynamic_libs("vtkmodules")
