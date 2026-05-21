@@ -17,14 +17,23 @@ def _settings(tmp_path):
 
 def test_qt_fusion_theme_can_be_applied() -> None:
     pytest.importorskip("PyQt6")
+    from qtpy.QtGui import QPalette
     from qtpy.QtWidgets import QApplication
 
     from unv_modal_viewer.gui import set_fusion_theme
 
     app = QApplication.instance() or QApplication([])
-    set_fusion_theme(app)
+    set_fusion_theme(app, "dark")
 
-    assert app.property("unv_modal_viewer_theme") == "fusion"
+    assert app.property("unv_modal_viewer_style") == "fusion"
+    assert app.property("unv_modal_viewer_theme") == "dark"
+    assert app.palette().color(QPalette.Window).name() == "#20242b"
+
+    set_fusion_theme(app, "light")
+
+    assert app.property("unv_modal_viewer_style") == "fusion"
+    assert app.property("unv_modal_viewer_theme") == "light"
+    assert app.palette().color(QPalette.Window).name() == "#f4f6f8"
 
 
 def test_main_window_loads_modal_fixture_offscreen(tmp_path) -> None:
@@ -205,17 +214,43 @@ def test_appearance_controls_update_render_options(tmp_path) -> None:
     path = write_generated_modal_unv(tmp_path / "modal_test.unv")
     app = QApplication.instance() or QApplication([])
     set_fusion_theme(app)
+    settings = _settings(tmp_path)
 
-    window = MainWindow(path, settings=_settings(tmp_path))
+    window = MainWindow(path, settings=settings)
     try:
+        window.theme_combo.setCurrentText("Light")
         window.colormap_combo.setCurrentText("plasma")
         window.reverse_colormap.setChecked(True)
         window.legend_position.setCurrentText("Right")
 
         options = window.current_render_options()
 
+        assert app.property("unv_modal_viewer_theme") == "light"
+        assert settings.load_theme() == "light"
+        assert window.current_theme_colors()["viewport_background"] == "#f7f9fb"
         assert options.pyvista_colormap == "plasma_r"
         assert options.legend_position == "Right"
+    finally:
+        window.close()
+
+
+def test_persisted_light_theme_initializes_main_window(tmp_path) -> None:
+    pytest.importorskip("PyQt6")
+    from qtpy.QtWidgets import QApplication
+
+    from unv_modal_viewer.gui import MainWindow, set_fusion_theme
+
+    path = write_generated_modal_unv(tmp_path / "modal_test.unv")
+    app = QApplication.instance() or QApplication([])
+    set_fusion_theme(app)
+    settings = _settings(tmp_path)
+    settings.save_theme("light")
+
+    window = MainWindow(path, settings=settings)
+    try:
+        assert window.theme_combo.currentData() == "light"
+        assert app.property("unv_modal_viewer_theme") == "light"
+        assert window.current_theme_colors()["viewport_text"] == "#111827"
     finally:
         window.close()
 

@@ -38,6 +38,18 @@ def test_render_options_round_trip(tmp_path: Path) -> None:
     assert restored.point_size == 14
 
 
+def test_theme_round_trip_and_validation(tmp_path: Path) -> None:
+    settings = AppSettings(_qsettings(tmp_path / "settings.ini"))
+
+    assert settings.load_theme() == "dark"
+
+    settings.save_theme("light")
+    assert AppSettings(_qsettings(tmp_path / "settings.ini")).load_theme() == "light"
+
+    settings.save_theme("invalid")
+    assert AppSettings(_qsettings(tmp_path / "settings.ini")).load_theme() == "dark"
+
+
 def test_view_and_overlay_preferences_round_trip(tmp_path: Path) -> None:
     settings = AppSettings(_qsettings(tmp_path / "settings.ini"))
 

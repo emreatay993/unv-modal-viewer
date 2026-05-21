@@ -74,6 +74,12 @@ class AppSettings:
             selected_color=str(self.settings.value("render/selected_color", defaults.selected_color)),
         )
 
+    def save_theme(self, theme: str) -> None:
+        self.settings.setValue("theme/name", _theme_name(theme))
+
+    def load_theme(self) -> str:
+        return _theme_name(self.settings.value("theme/name", "dark"))
+
     def save_view_flags(self, points: bool, surface: bool, generated_surface: bool, traces: bool) -> None:
         self.settings.setValue("view/points", points)
         self.settings.setValue("view/surface", surface)
@@ -115,3 +121,8 @@ def _bool(value: object) -> bool:
     if isinstance(value, str):
         return value.lower() in {"1", "true", "yes"}
     return bool(value)
+
+
+def _theme_name(value: object) -> str:
+    normalized = str(value).strip().lower()
+    return normalized if normalized in {"dark", "light"} else "dark"

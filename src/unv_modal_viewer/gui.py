@@ -68,6 +68,50 @@ from .visualization import (
     trace_line_mesh,
 )
 
+THEME_LABELS = {"dark": "Dark", "light": "Light"}
+THEME_COLORS = {
+    "dark": {
+        "window": "#20242b",
+        "window_text": "#eef2f7",
+        "base": "#15181d",
+        "alternate": "#232832",
+        "tooltip_base": "#eef2f7",
+        "tooltip_text": "#15181d",
+        "button": "#2d3440",
+        "button_hover": "#3a4250",
+        "button_text": "#eef2f7",
+        "bright_text": "#ff6b6b",
+        "highlight": "#4c8bf5",
+        "highlighted_text": "#ffffff",
+        "border": "#3a4250",
+        "field_border": "#465161",
+        "section_header": "#252b35",
+        "section_header_hover": "#303746",
+        "viewport_background": "#15181d",
+        "viewport_text": "#ffffff",
+    },
+    "light": {
+        "window": "#f4f6f8",
+        "window_text": "#17202a",
+        "base": "#ffffff",
+        "alternate": "#edf1f5",
+        "tooltip_base": "#17202a",
+        "tooltip_text": "#ffffff",
+        "button": "#e7ebf0",
+        "button_hover": "#d8dee8",
+        "button_text": "#17202a",
+        "bright_text": "#b42318",
+        "highlight": "#2f6fed",
+        "highlighted_text": "#ffffff",
+        "border": "#c4ccd6",
+        "field_border": "#aab4c2",
+        "section_header": "#e9edf2",
+        "section_header_hover": "#dfe5ec",
+        "viewport_background": "#f7f9fb",
+        "viewport_text": "#111827",
+    },
+}
+
 
 class MainWindow(QMainWindow):
     def __init__(self, initial_path: str | Path | None = None, settings: AppSettings | None = None) -> None:
@@ -76,6 +120,10 @@ class MainWindow(QMainWindow):
         self.resize(1440, 900)
 
         self.settings = settings or AppSettings()
+        self.theme_name = self.settings.load_theme()
+        app = QApplication.instance()
+        if app is not None:
+            set_fusion_theme(app, self.theme_name)
         self.model: ModalModel | None = None
         self.current_path: Path | None = None
         self.render_options = self.settings.load_render_options()
@@ -235,6 +283,12 @@ class MainWindow(QMainWindow):
         self.appearance_section = _CollapsibleSection("Appearance")
         appearance_layout = QFormLayout()
         self.appearance_section.set_content_layout(appearance_layout)
+        self.theme_combo = QComboBox()
+        for key, label in THEME_LABELS.items():
+            self.theme_combo.addItem(label, key)
+        theme_index = self.theme_combo.findData(self.theme_name)
+        if theme_index >= 0:
+            self.theme_combo.setCurrentIndex(theme_index)
         self.colormap_combo = QComboBox()
         self.colormap_combo.addItems(["viridis", "plasma", "turbo", "cividis", "coolwarm", "gray", "jet"])
         self.reverse_colormap = QCheckBox()
@@ -253,6 +307,7 @@ class MainWindow(QMainWindow):
         self.selected_color_combo = QComboBox()
         for name, value in color_choices().items():
             self.selected_color_combo.addItem(name, value)
+        appearance_layout.addRow("Theme", self.theme_combo)
         appearance_layout.addRow("Colormap", self.colormap_combo)
         appearance_layout.addRow("Reverse colormap", self.reverse_colormap)
         appearance_layout.addRow("Auto scalar range", self.scalar_auto)
@@ -485,6 +540,7 @@ class MainWindow(QMainWindow):
         self.export_scene_button.clicked.connect(self._export_scene)
         self.export_animation_button.clicked.connect(self._export_animation)
         self.copy_diagnostics_button.clicked.connect(self._copy_diagnostics)
+        self.theme_combo.currentIndexChanged.connect(lambda *_: self._theme_changed())
 
         self.animation_timer = QTimer(self)
         self.animation_timer.setInterval(self._animation_interval_ms())
@@ -572,7 +628,8 @@ class MainWindow(QMainWindow):
     def refresh_scene(self, reset_camera: bool = False) -> None:
         self._scene_meshes.clear()
         self.plotter.clear()
-        self.plotter.set_background("#15181d")
+        theme_colors = self.current_theme_colors()
+        self.plotter.set_background(theme_colors["viewport_background"])
         self.plotter.add_axes()
 
         if self.model is None or not self.model.nodes:
@@ -580,7 +637,7 @@ class MainWindow(QMainWindow):
                 "Open a UNV/UFF modal-test file",
                 position="upper_left",
                 font_size=12,
-                color="white",
+                color=theme_colors["viewport_text"],
                 name="hover_text",
             )
             self.plotter.render()
@@ -621,7 +678,7 @@ class MainWindow(QMainWindow):
                 clim=scalar_clim,
                 opacity=options.surface_opacity,
                 smooth_shading=True,
-                scalar_bar_args=_scalar_bar_args(scalar_title, options.legend_position),
+                scalar_bar_args=_scalar_bar_args(scalar_title, options.legend_position, theme_colors["viewport_text"]),
                 show_scalar_bar=options.legend_visible,
             )
 
@@ -642,7 +699,7 @@ class MainWindow(QMainWindow):
                 clim=scalar_clim,
                 point_size=options.point_size,
                 render_points_as_spheres=True,
-                scalar_bar_args=_scalar_bar_args(scalar_title, options.legend_position),
+                scalar_bar_args=_scalar_bar_args(scalar_title, options.legend_position, theme_colors["viewport_text"]),
                 show_scalar_bar=options.legend_visible and surface is None,
             )
 
@@ -652,7 +709,7 @@ class MainWindow(QMainWindow):
             "Hover over a point",
             position="upper_left",
             font_size=10,
-            color="white",
+            color=theme_colors["viewport_text"],
             name="hover_text",
         )
         if reset_camera:
@@ -671,6 +728,13 @@ class MainWindow(QMainWindow):
 
     def current_mode_normalization(self) -> str:
         return ModeNormalization.BY_LABEL.get(self.normalization_combo.currentText(), ModeNormalization.RAW)
+
+    def current_theme(self) -> str:
+        value = self.theme_combo.currentData()
+        return str(value) if value in THEME_LABELS else "dark"
+
+    def current_theme_colors(self) -> dict[str, str]:
+        return THEME_COLORS[self.current_theme()]
 
     def current_render_options(self) -> RenderOptions:
         return RenderOptions(
@@ -930,6 +994,14 @@ class MainWindow(QMainWindow):
 
     def _appearance_changed(self) -> None:
         self.render_options = self.current_render_options()
+        self.refresh_scene(reset_camera=False)
+
+    def _theme_changed(self) -> None:
+        self.theme_name = self.current_theme()
+        self.settings.save_theme(self.theme_name)
+        app = QApplication.instance()
+        if app is not None:
+            set_fusion_theme(app, self.theme_name)
         self.refresh_scene(reset_camera=False)
 
     def _clear_selection(self) -> None:
@@ -1443,7 +1515,7 @@ class MainWindow(QMainWindow):
             f"Node {label}   X {x:.6g}   Y {y:.6g}   Z {z:.6g}   Value {value:.6g}",
             position="upper_left",
             font_size=10,
-            color="white",
+            color=self.current_theme_colors()["viewport_text"],
             name="hover_text",
         )
 
@@ -1466,6 +1538,7 @@ class MainWindow(QMainWindow):
         self._select_point_index(point_id, toggle=toggle)
 
     def closeEvent(self, event: object) -> None:
+        self.settings.save_theme(self.current_theme())
         self.settings.save_render_options(self.current_render_options())
         self.settings.save_view_flags(
             self.show_points.isChecked(),
@@ -1544,60 +1617,67 @@ class _CollapsibleSection(QWidget):
         self.updateGeometry()
 
 
-def set_fusion_theme(app: QApplication) -> None:
+def set_fusion_theme(app: QApplication, theme: str = "dark") -> None:
+    theme_name = str(theme).strip().lower()
+    if theme_name not in THEME_COLORS:
+        theme_name = "dark"
+    colors = THEME_COLORS[theme_name]
+
     fusion = QStyleFactory.create("Fusion")
     app.setStyle(fusion if fusion is not None else "Fusion")
-    app.setProperty("unv_modal_viewer_theme", "fusion")
+    app.setProperty("unv_modal_viewer_style", "fusion")
+    app.setProperty("unv_modal_viewer_theme", theme_name)
+
     palette = QPalette()
-    palette.setColor(QPalette.Window, QColor("#20242b"))
-    palette.setColor(QPalette.WindowText, QColor("#eef2f7"))
-    palette.setColor(QPalette.Base, QColor("#15181d"))
-    palette.setColor(QPalette.AlternateBase, QColor("#232832"))
-    palette.setColor(QPalette.ToolTipBase, QColor("#eef2f7"))
-    palette.setColor(QPalette.ToolTipText, QColor("#15181d"))
-    palette.setColor(QPalette.Text, QColor("#eef2f7"))
-    palette.setColor(QPalette.Button, QColor("#2d3440"))
-    palette.setColor(QPalette.ButtonText, QColor("#eef2f7"))
-    palette.setColor(QPalette.BrightText, QColor("#ff6b6b"))
-    palette.setColor(QPalette.Highlight, QColor("#4c8bf5"))
-    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+    palette.setColor(QPalette.Window, QColor(colors["window"]))
+    palette.setColor(QPalette.WindowText, QColor(colors["window_text"]))
+    palette.setColor(QPalette.Base, QColor(colors["base"]))
+    palette.setColor(QPalette.AlternateBase, QColor(colors["alternate"]))
+    palette.setColor(QPalette.ToolTipBase, QColor(colors["tooltip_base"]))
+    palette.setColor(QPalette.ToolTipText, QColor(colors["tooltip_text"]))
+    palette.setColor(QPalette.Text, QColor(colors["window_text"]))
+    palette.setColor(QPalette.Button, QColor(colors["button"]))
+    palette.setColor(QPalette.ButtonText, QColor(colors["button_text"]))
+    palette.setColor(QPalette.BrightText, QColor(colors["bright_text"]))
+    palette.setColor(QPalette.Highlight, QColor(colors["highlight"]))
+    palette.setColor(QPalette.HighlightedText, QColor(colors["highlighted_text"]))
     app.setPalette(palette)
     app.setStyleSheet(
-        """
-        QWidget { font-size: 10pt; }
-        QToolButton#SectionHeader {
+        f"""
+        QWidget {{ font-size: 10pt; }}
+        QToolButton#SectionHeader {{
             text-align: left;
             padding: 8px 10px;
-            border: 1px solid #3a4250;
+            border: 1px solid {colors["border"]};
             border-radius: 6px;
             font-weight: 600;
-            background: #252b35;
-        }
-        QToolButton#SectionHeader:hover { background: #303746; }
-        QToolButton#SectionHeader:checked {
+            background: {colors["section_header"]};
+        }}
+        QToolButton#SectionHeader:hover {{ background: {colors["section_header_hover"]}; }}
+        QToolButton#SectionHeader:checked {{
             border-bottom-left-radius: 0;
             border-bottom-right-radius: 0;
-        }
-        QFrame#SectionContent {
-            border: 1px solid #3a4250;
+        }}
+        QFrame#SectionContent {{
+            border: 1px solid {colors["border"]};
             border-top: 0;
             border-bottom-left-radius: 6px;
             border-bottom-right-radius: 6px;
-            background: #20242b;
-        }
-        QPushButton { padding: 7px 10px; border-radius: 4px; }
-        QPushButton:hover { background: #3a4250; }
-        QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+            background: {colors["window"]};
+        }}
+        QPushButton {{ padding: 7px 10px; border-radius: 4px; }}
+        QPushButton:hover {{ background: {colors["button_hover"]}; }}
+        QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
             padding: 4px;
-            border: 1px solid #465161;
+            border: 1px solid {colors["field_border"]};
             border-radius: 4px;
-            background: #15181d;
-        }
-        QTableWidget {
-            gridline-color: #3a4250;
-            selection-background-color: #4c8bf5;
-        }
-        QLabel#PanelTitle { font-size: 16pt; font-weight: 700; }
+            background: {colors["base"]};
+        }}
+        QTableWidget {{
+            gridline-color: {colors["border"]};
+            selection-background-color: {colors["highlight"]};
+        }}
+        QLabel#PanelTitle {{ font-size: 16pt; font-weight: 700; }}
         """
     )
 
@@ -1638,7 +1718,7 @@ def _view_model(model: ModalModel, labels: list[int]) -> ModalModel:
     )
 
 
-def _scalar_bar_args(title: str, position: str = "Left") -> dict[str, object]:
+def _scalar_bar_args(title: str, position: str = "Left", color: str = "white") -> dict[str, object]:
     left = position != "Right"
     return {
         "title": title,
@@ -1649,7 +1729,7 @@ def _scalar_bar_args(title: str, position: str = "Left") -> dict[str, object]:
         "height": 0.72,
         "title_font_size": 12,
         "label_font_size": 10,
-        "color": "white",
+        "color": color,
     }
 
 

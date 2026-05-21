@@ -12,13 +12,15 @@ def main(argv: list[str] | None = None) -> int:
     from qtpy.QtCore import QCoreApplication
     from qtpy.QtWidgets import QApplication
     from .gui import MainWindow, set_fusion_theme
+    from .settings import AppSettings
 
     QCoreApplication.setOrganizationName("Mechanical Design Tool Suite")
     QCoreApplication.setApplicationName("UNV Modal Viewer")
     app = QApplication.instance() or QApplication(sys.argv[:1] + args)
-    set_fusion_theme(app)
+    settings = AppSettings()
+    set_fusion_theme(app, settings.load_theme())
     initial = Path(args[0]) if args else None
-    window = MainWindow(initial)
+    window = MainWindow(initial, settings=settings)
     window.show()
     return int(app.exec())
 
